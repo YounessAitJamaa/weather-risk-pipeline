@@ -45,5 +45,8 @@ csv_path = BASE_DIR/"data"/"bronze"/"cities.csv"
 
 df = pd.read_csv(csv_path)
 
-for index, row in df.head(2).iterrows(): 
-    get_meteo(row["city"], row["lat"], row["lng"])
+for index, row in df.iterrows(): 
+    try:
+        get_meteo(row["city"], row["lat"], row["lng"])
+    except requests.RequestException as e:
+        print(f"Error for {row['city']} : ", e)

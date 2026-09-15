@@ -11,4 +11,4 @@ __pycache__/
 # Environment variables / secrets
 .env
 
-data/bronze/weather/
+data/bronze/weather/    
