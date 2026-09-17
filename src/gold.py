@@ -17,7 +17,7 @@ df['date'] = pd.to_datetime(df['date'])
 
 def categorize_precipitation(value):
     if value == 0:
-        return "None"
+        return "No Rain"
     elif value <= 5:
         return "Light"
     elif value <= 15:
