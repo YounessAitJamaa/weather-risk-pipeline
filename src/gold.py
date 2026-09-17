@@ -6,12 +6,11 @@ import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SILVER_PATH = BASE_DIR / "silver"
+SILVER_PATH = BASE_DIR / "data" /"silver"
 
 df = pd.read_csv(SILVER_PATH / "weather_clean.csv")
 
 df['date'] = pd.to_datetime(df['date'])
-
 
 
 # Weather categorization
@@ -280,7 +279,7 @@ df["risk_category"] = df["risk_score"].apply(categorize_risk)
 
 # Save Gold dataset
 
-GOLD_PATH = BASE_DIR / "gold"
+GOLD_PATH = BASE_DIR / "data" /"gold"
 
 GOLD_PATH.mkdir(parents=True, exist_ok=True)
 
