@@ -74,6 +74,20 @@ with engine.connect() as connection:
 
     daily_risk = result.fetchall()
 
+    result = connection.execute(
+        text("""
+            SELECT
+                ROUND(AVG(rain_risk)::numeric, 2) AS average_rain_risk,
+                ROUND(AVG(wind_risk)::numeric, 2) AS average_wind_risk,
+                ROUND(AVG(gust_risk)::numeric, 2) AS average_gust_risk,
+                ROUND(AVG(temperature_risk)::numeric, 2) AS average_temperature_risk,
+                ROUND(AVG(weather_code_risk)::numeric, 2) AS average_weather_code_risk
+            FROM weather_risk
+        """)
+    )
+
+    risk_causes = result.fetchone()
+
 
 
 # KPIs
@@ -134,5 +148,36 @@ daily_risk_df["Average Risk"] = pd.to_numeric(daily_risk_df["Average Risk"])
 st.line_chart(
     daily_risk_df,
     x="Date",
+    y="Average Risk"
+)
+
+# risk causes
+
+risk_causes_df = pd.DataFrame(
+    {
+        "Cause": [
+            "Rain",
+            "Wind",
+            "Wind Gusts",
+            "Temperature",
+            "Weather Code"
+        ],
+        "Average Risk": [
+            risk_causes[0],
+            risk_causes[1],
+            risk_causes[2],
+            risk_causes[3],
+            risk_causes[4]
+        ]
+    }
+)
+
+risk_causes_df["Average Risk"] = pd.to_numeric(risk_causes_df["Average Risk"])
+
+st.subheader("Risk Causes")
+
+st.bar_chart(
+    risk_causes_df,
+    x="Cause",
     y="Average Risk"
 )
