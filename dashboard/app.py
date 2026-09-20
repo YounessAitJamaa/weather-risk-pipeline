@@ -1,8 +1,13 @@
 import streamlit as st
 import pandas as pd
+import os
 from sqlalchemy import create_engine, text
 
-DATABASE_URL = "postgresql://postgres@localhost/weather_risk"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres@localhost/weather_risk"
+)
+
 engine = create_engine(DATABASE_URL)
 
 st.title("Weather Risk Dashboard")

@@ -23,7 +23,7 @@ cities_df = cities_df[["city", "lat", "lng"]].copy()
 
 # connect to PostgreSQL
 
-DATABASE_URL = "postgresql://postgres@localhost/weather_risk"
+DATABASE_URL = "postgresql://postgres:postgres@postgres:5432/weather_risk"
 
 engine = create_engine(DATABASE_URL)
 

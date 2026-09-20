@@ -1,0 +1,63 @@
+services:
+
+  postgres:
+    image: postgres:18
+    container_name: weather_risk_postgres
+
+    environment:
+      POSTGRES_DB: weather_risk
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  airflow:
+    image: apache/airflow:3.3.2
+    container_name: weather_risk_airflow
+
+    depends_on:
+      - postgres
+
+    ports:
+      - "8081:8080"
+
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/weather_risk
+
+    command: standalone
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+
+  streamlit:
+    image: python:3.12-slim
+    container_name: weather_risk_streamlit
+
+    depends_on:
+      - postgres
+
+    ports:
+      - "8501:8501"
+
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/weather_risk
+
+    working_dir: /app
+
+    volumes:
+      - ./dashboard:/app/dashboard
+
+    command: >
+      sh -c "pip install streamlit pandas sqlalchemy psycopg2-binary &&
+             streamlit run dashboard/app.py
+             --server.address=0.0.0.0"
+
+volumes:
+
+  postgres_data:
