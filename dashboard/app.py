@@ -145,52 +145,22 @@ with engine.connect() as connection:
     maximum_precipitation = result.scalar()
 
     # KPI 4 - Number of risky periods
-    if selected_city == "All cities" and selected_date == "All dates":
-        result = connection.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM weather_risk wr
-                WHERE wr.risk_score > 20
-            """)
-        )
+    risky_filter = city_filter
 
-    elif selected_city != "All cities" and selected_date == "All dates":
-        result = connection.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM weather_risk wr
-                JOIN cities c
-                    ON wr.city_id = c.city_id
-                WHERE c.city = :city
-                AND wr.risk_score > 20
-            """),
-            city_params
-        )
-
-    elif selected_city == "All cities" and selected_date != "All dates":
-        result = connection.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM weather_risk wr
-                WHERE wr.date = :date
-                AND wr.risk_score > 20
-            """),
-            city_params
-        )
-
+    if risky_filter == "":
+        risky_filter = "WHERE wr.risk_score > 20"
     else:
-        result = connection.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM weather_risk wr
-                JOIN cities c
-                    ON wr.city_id = c.city_id
-                WHERE c.city = :city
-                AND wr.date = :date
-                AND wr.risk_score > 20
-            """),
-            city_params
-        )
+        risky_filter += " AND wr.risk_score > 20"
+
+    result = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + risky_filter),
+        city_params
+    )
 
     number_of_risky_periods = result.scalar()
 
@@ -314,7 +284,7 @@ risk_chart = pd.DataFrame(
 st.bar_chart(risk_chart)
 
 # Top 10 Risky City/Date Records
-st.subheader("Top 10 Risky City/Date Records")
+st.subheader("Highest-Risk Periods")
 
 risky_records_df = pd.DataFrame(
     top_risky_records,
