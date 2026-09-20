@@ -43,10 +43,23 @@ with engine.connect() as connection:
     risk_categories = [row[0] for row in risk_distribution]
     risk_counts = [row[1] for row in risk_distribution]
 
-risk_chart = pd.DataFrame(
-    {"Counts" : risk_counts},
-    index=risk_categories
-)
+
+    result = connection.execute(
+        text("""
+            SELECT
+                c.city,
+                wr.date,
+                wr.risk_score,
+                wr.risk_category
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+            ORDER BY wr.risk_score DESC
+            LIMIT 10
+        """)
+    )
+
+    top_risky_records = result.fetchall()
 
 
 col1, col2, col3, col4 = st.columns(4)
@@ -65,4 +78,19 @@ with col4:
 
 st.subheader("Risk Distribution")
 
+
+risk_chart = pd.DataFrame(
+    {"Counts" : risk_counts},
+    index=risk_categories
+)
+
 st.bar_chart(risk_chart)
+
+st.subheader("Top 10 Risky City/Date Records")
+
+risky_records_df = pd.DataFrame(
+    top_risky_records,
+    columns=["City", "Date", "Risk Score", "Risk Category"]
+)
+
+st.dataframe(risky_records_df)
