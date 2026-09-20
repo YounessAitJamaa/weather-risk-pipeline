@@ -2,18 +2,13 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-
 DATABASE_URL = "postgresql://postgres@localhost/weather_risk"
-
 engine = create_engine(DATABASE_URL)
 
 st.title("Weather Risk Dashboard")
 
-
 # get the cities and dates for filter
-
 with engine.connect() as connection:
-
     result = connection.execute(
         text("""
             SELECT city
@@ -21,7 +16,6 @@ with engine.connect() as connection:
             ORDER BY city
         """)
     )
-
     cities = [row[0] for row in result.fetchall()]
 
     result = connection.execute(
@@ -31,52 +25,67 @@ with engine.connect() as connection:
             ORDER BY date
         """)
     )
-
     dates = [row[0] for row in result.fetchall()]
 
-
 # filter by city
-
 selected_city = st.selectbox(
     "Select a city",
     ["All cities"] + cities
 )
 
 # filter by date
-
 selected_date = st.selectbox(
     "Select a date",
     ["All dates"] + dates
 )
 
-if selected_city == "All cities" and selected_date == "All dates":
+# filter by period
+selected_period = st.date_input(
+    "Select a period",
+    value=(min(dates), max(dates))
+)
 
-    city_filter = ""
-    city_params = {}
+period_start = selected_period[0]
+period_end = selected_period[1]
+
+
+if selected_city == "All cities" and selected_date == "All dates":
+    city_filter = "WHERE wr.date BETWEEN :period_start AND :period_end"
+    city_params = {
+        "period_start": period_start,
+        "period_end": period_end
+    }
 
 elif selected_city != "All cities" and selected_date == "All dates":
-
-    city_filter = "WHERE c.city = :city"
-    city_params = {"city": selected_city}
+    city_filter = """
+        WHERE c.city = :city
+        AND wr.date BETWEEN :period_start AND :period_end
+    """
+    city_params = {
+        "city": selected_city,
+        "period_start": period_start,
+        "period_end": period_end
+    }
 
 elif selected_city == "All cities" and selected_date != "All dates":
-
     city_filter = "WHERE wr.date = :date"
-    city_params = {"date": selected_date}
+    city_params = {
+        "date": selected_date
+    }
 
 else:
-
-    city_filter = "WHERE c.city = :city AND wr.date = :date"
+    city_filter = """
+        WHERE c.city = :city
+        AND wr.date = :date
+    """
     city_params = {
         "city": selected_city,
         "date": selected_date
     }
 
-
 with engine.connect() as connection:
 
-    # KPIs
-
+    # KPI 1 - Number of cities
     result = connection.execute(
         text("""
             SELECT COUNT(DISTINCT c.city)
@@ -86,25 +95,34 @@ with engine.connect() as connection:
         """ + city_filter),
         city_params
     )
-
     number_of_cities = result.scalar()
 
-
+    # KPI 2 - Maximum temperature
     result = connection.execute(
         text("""
-            SELECT COUNT(DISTINCT wr.date)
+            SELECT MAX(wr.temp_max)
             FROM weather_risk wr
             JOIN cities c
                 ON wr.city_id = c.city_id
         """ + city_filter),
         city_params
     )
+    maximum_temperature = result.scalar()
 
-    number_of_forecast_days = result.scalar()
+    # KPI 3 - Maximum precipitation
+    result = connection.execute(
+        text("""
+            SELECT MAX(wr.precipitation)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter),
+        city_params
+    )
+    maximum_precipitation = result.scalar()
 
-
+    # KPI 4 - Number of risky periods
     if selected_city == "All cities" and selected_date == "All dates":
-
         result = connection.execute(
             text("""
                 SELECT COUNT(*)
@@ -114,7 +132,6 @@ with engine.connect() as connection:
         )
 
     elif selected_city != "All cities" and selected_date == "All dates":
-
         result = connection.execute(
             text("""
                 SELECT COUNT(*)
@@ -128,7 +145,6 @@ with engine.connect() as connection:
         )
 
     elif selected_city == "All cities" and selected_date != "All dates":
-
         result = connection.execute(
             text("""
                 SELECT COUNT(*)
@@ -140,7 +156,6 @@ with engine.connect() as connection:
         )
 
     else:
-
         result = connection.execute(
             text("""
                 SELECT COUNT(*)
@@ -154,25 +169,24 @@ with engine.connect() as connection:
             city_params
         )
 
+    number_of_risky_periods = result.scalar()
 
-    number_of_risky_records = result.scalar()
-
-
+    # KPI 5 - City presenting the highest risk
     result = connection.execute(
         text("""
-            SELECT MAX(wr.risk_score)
+            SELECT c.city
             FROM weather_risk wr
             JOIN cities c
                 ON wr.city_id = c.city_id
-        """ + city_filter),
+        """ + city_filter + """
+            ORDER BY wr.risk_score DESC
+            LIMIT 1
+        """),
         city_params
     )
-
-    highest_risk = result.scalar()
-
+    highest_risk_city = result.scalar()
 
     # Risk distribution
-
     result = connection.execute(
         text("""
             SELECT
@@ -189,14 +203,10 @@ with engine.connect() as connection:
     )
 
     risk_distribution = result.fetchall()
-
     risk_categories = [row[0] for row in risk_distribution]
-
     risk_counts = [row[1] for row in risk_distribution]
 
-
     # Top 10 risky city/date records
-
     result = connection.execute(
         text("""
             SELECT
@@ -216,9 +226,7 @@ with engine.connect() as connection:
 
     top_risky_records = result.fetchall()
 
-
     # Daily risk trend
-
     result = connection.execute(
         text("""
             SELECT
@@ -236,9 +244,7 @@ with engine.connect() as connection:
 
     daily_risk = result.fetchall()
 
-
     # Risk causes
-
     result = connection.execute(
         text("""
             SELECT
@@ -256,26 +262,25 @@ with engine.connect() as connection:
 
     risk_causes = result.fetchone()
 
-
 # KPIs
-
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     st.metric("Cities", number_of_cities)
 
 with col2:
-    st.metric("Forecast Days", number_of_forecast_days)
+    st.metric("Max Temperature", maximum_temperature)
 
 with col3:
-    st.metric("Risky Records", number_of_risky_records)
+    st.metric("Max Precipitation", maximum_precipitation)
 
 with col4:
-    st.metric("Highest Risk", highest_risk)
+    st.metric("Risky Periods", number_of_risky_periods)
 
+with col5:
+    st.metric("Highest-Risk City", highest_risk_city)
 
 # Risk Distribution
-
 st.subheader("Risk Distribution")
 
 risk_chart = pd.DataFrame(
@@ -285,9 +290,7 @@ risk_chart = pd.DataFrame(
 
 st.bar_chart(risk_chart)
 
-
 # Top 10 Risky City/Date Records
-
 st.subheader("Top 10 Risky City/Date Records")
 
 risky_records_df = pd.DataFrame(
@@ -302,9 +305,7 @@ risky_records_df = pd.DataFrame(
 
 st.dataframe(risky_records_df)
 
-
 # Daily Risk Trend
-
 st.subheader("Daily Risk Trend")
 
 daily_risk_df = pd.DataFrame(
@@ -329,9 +330,7 @@ st.line_chart(
     y="Average Risk"
 )
 
-
 # Risk causes
-
 risk_causes_df = pd.DataFrame(
     {
         "Cause": [
