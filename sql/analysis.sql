@@ -1,4 +1,3 @@
-```sql
 -- ============================================================
 -- WEATHER RISK PIPELINE - ANALYSE SQL
 -- Base de données : weather_risk
@@ -366,4 +365,3 @@ JOIN cities c
     ON w.city_id = c.city_id
 ORDER BY w.risk_score DESC, w.date
 LIMIT 20;
-```
