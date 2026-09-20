@@ -10,7 +10,7 @@ engine = create_engine(DATABASE_URL)
 st.title("Weather Risk Dashboard")
 
 
-# get the cities for filter
+# get the cities and dates for filter
 
 with engine.connect() as connection:
 
@@ -24,6 +24,16 @@ with engine.connect() as connection:
 
     cities = [row[0] for row in result.fetchall()]
 
+    result = connection.execute(
+        text("""
+            SELECT DISTINCT date
+            FROM weather_risk
+            ORDER BY date
+        """)
+    )
+
+    dates = [row[0] for row in result.fetchall()]
+
 
 # filter by city
 
@@ -32,15 +42,35 @@ selected_city = st.selectbox(
     ["All cities"] + cities
 )
 
-if selected_city == "All cities":
+# filter by date
+
+selected_date = st.selectbox(
+    "Select a date",
+    ["All dates"] + dates
+)
+
+if selected_city == "All cities" and selected_date == "All dates":
 
     city_filter = ""
     city_params = {}
 
-else:
+elif selected_city != "All cities" and selected_date == "All dates":
 
     city_filter = "WHERE c.city = :city"
     city_params = {"city": selected_city}
+
+elif selected_city == "All cities" and selected_date != "All dates":
+
+    city_filter = "WHERE wr.date = :date"
+    city_params = {"date": selected_date}
+
+else:
+
+    city_filter = "WHERE c.city = :city AND wr.date = :date"
+    city_params = {
+        "city": selected_city,
+        "date": selected_date
+    }
 
 
 with engine.connect() as connection:
@@ -73,7 +103,7 @@ with engine.connect() as connection:
     number_of_forecast_days = result.scalar()
 
 
-    if selected_city == "All cities":
+    if selected_city == "All cities" and selected_date == "All dates":
 
         result = connection.execute(
             text("""
@@ -83,7 +113,7 @@ with engine.connect() as connection:
             """)
         )
 
-    else:
+    elif selected_city != "All cities" and selected_date == "All dates":
 
         result = connection.execute(
             text("""
@@ -96,6 +126,34 @@ with engine.connect() as connection:
             """),
             city_params
         )
+
+    elif selected_city == "All cities" and selected_date != "All dates":
+
+        result = connection.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM weather_risk wr
+                WHERE wr.date = :date
+                AND wr.risk_score > 20
+            """),
+            city_params
+        )
+
+    else:
+
+        result = connection.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM weather_risk wr
+                JOIN cities c
+                    ON wr.city_id = c.city_id
+                WHERE c.city = :city
+                AND wr.date = :date
+                AND wr.risk_score > 20
+            """),
+            city_params
+        )
+
 
     number_of_risky_records = result.scalar()
 
