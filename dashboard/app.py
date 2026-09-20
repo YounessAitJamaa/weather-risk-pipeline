@@ -10,39 +10,134 @@ engine = create_engine(DATABASE_URL)
 st.title("Weather Risk Dashboard")
 
 
+# get the cities for filter
+
 with engine.connect() as connection:
+
     result = connection.execute(
-        text("SELECT COUNT(*) FROM cities")
+        text("""
+            SELECT city
+            FROM cities
+            ORDER BY city
+        """)
+    )
+
+    cities = [row[0] for row in result.fetchall()]
+
+
+# filter by city
+
+selected_city = st.selectbox(
+    "Select a city",
+    ["All cities"] + cities
+)
+
+if selected_city == "All cities":
+
+    city_filter = ""
+    city_params = {}
+
+else:
+
+    city_filter = "WHERE c.city = :city"
+    city_params = {"city": selected_city}
+
+
+with engine.connect() as connection:
+
+    # KPIs
+
+    result = connection.execute(
+        text("""
+            SELECT COUNT(DISTINCT c.city)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter),
+        city_params
     )
 
     number_of_cities = result.scalar()
 
+
     result = connection.execute(
-        text("SELECT COUNT(DISTINCT date) FROM weather_risk")
+        text("""
+            SELECT COUNT(DISTINCT wr.date)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter),
+        city_params
     )
 
     number_of_forecast_days = result.scalar()
 
-    result = connection.execute(
-            text("SELECT COUNT(*) FROM weather_risk WHERE risk_score > 20")
-    )
+
+    if selected_city == "All cities":
+
+        result = connection.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM weather_risk wr
+                WHERE wr.risk_score > 20
+            """)
+        )
+
+    else:
+
+        result = connection.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM weather_risk wr
+                JOIN cities c
+                    ON wr.city_id = c.city_id
+                WHERE c.city = :city
+                AND wr.risk_score > 20
+            """),
+            city_params
+        )
 
     number_of_risky_records = result.scalar()
 
+
     result = connection.execute(
-            text("SELECT MAX(risk_score) FROM weather_risk")
+        text("""
+            SELECT MAX(wr.risk_score)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter),
+        city_params
     )
 
     highest_risk = result.scalar()
 
+
+    # Risk distribution
+
     result = connection.execute(
-                text("SELECT risk_category, COUNT(*) FROM weather_risk GROUP BY risk_category;")
+        text("""
+            SELECT
+                wr.risk_category,
+                COUNT(*)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter + """
+            GROUP BY wr.risk_category
+            ORDER BY COUNT(*) DESC
+        """),
+        city_params
     )
-    
+
     risk_distribution = result.fetchall()
+
     risk_categories = [row[0] for row in risk_distribution]
+
     risk_counts = [row[1] for row in risk_distribution]
 
+
+    # Top 10 risky city/date records
 
     result = connection.execute(
         text("""
@@ -54,40 +149,54 @@ with engine.connect() as connection:
             FROM weather_risk wr
             JOIN cities c
                 ON wr.city_id = c.city_id
+        """ + city_filter + """
             ORDER BY wr.risk_score DESC
             LIMIT 10
-        """)
+        """),
+        city_params
     )
 
     top_risky_records = result.fetchall()
 
+
+    # Daily risk trend
+
     result = connection.execute(
         text("""
             SELECT
-                date,
-                ROUND(AVG(risk_score)::numeric, 2) AS average_risk
-            FROM weather_risk
-            GROUP BY date
-            ORDER BY date
-        """)
+                wr.date,
+                ROUND(AVG(wr.risk_score)::numeric, 2) AS average_risk
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter + """
+            GROUP BY wr.date
+            ORDER BY wr.date
+        """),
+        city_params
     )
 
     daily_risk = result.fetchall()
 
+
+    # Risk causes
+
     result = connection.execute(
         text("""
             SELECT
-                ROUND(AVG(rain_risk)::numeric, 2) AS average_rain_risk,
-                ROUND(AVG(wind_risk)::numeric, 2) AS average_wind_risk,
-                ROUND(AVG(gust_risk)::numeric, 2) AS average_gust_risk,
-                ROUND(AVG(temperature_risk)::numeric, 2) AS average_temperature_risk,
-                ROUND(AVG(weather_code_risk)::numeric, 2) AS average_weather_code_risk
-            FROM weather_risk
-        """)
+                ROUND(AVG(wr.rain_risk)::numeric, 2),
+                ROUND(AVG(wr.wind_risk)::numeric, 2),
+                ROUND(AVG(wr.gust_risk)::numeric, 2),
+                ROUND(AVG(wr.temperature_risk)::numeric, 2),
+                ROUND(AVG(wr.weather_code_risk)::numeric, 2)
+            FROM weather_risk wr
+            JOIN cities c
+                ON wr.city_id = c.city_id
+        """ + city_filter),
+        city_params
     )
 
     risk_causes = result.fetchone()
-
 
 
 # KPIs
@@ -107,13 +216,12 @@ with col4:
     st.metric("Highest Risk", highest_risk)
 
 
-
-# Risk Distribution 
+# Risk Distribution
 
 st.subheader("Risk Distribution")
 
 risk_chart = pd.DataFrame(
-    {"Counts" : risk_counts},
+    {"Counts": risk_counts},
     index=risk_categories
 )
 
@@ -126,10 +234,16 @@ st.subheader("Top 10 Risky City/Date Records")
 
 risky_records_df = pd.DataFrame(
     top_risky_records,
-    columns=["City", "Date", "Risk Score", "Risk Category"]
+    columns=[
+        "City",
+        "Date",
+        "Risk Score",
+        "Risk Category"
+    ]
 )
 
 st.dataframe(risky_records_df)
+
 
 # Daily Risk Trend
 
@@ -137,13 +251,19 @@ st.subheader("Daily Risk Trend")
 
 daily_risk_df = pd.DataFrame(
     daily_risk,
-    columns=["Date", "Average Risk"]
+    columns=[
+        "Date",
+        "Average Risk"
+    ]
 )
 
+daily_risk_df["Date"] = pd.to_datetime(
+    daily_risk_df["Date"]
+)
 
-daily_risk_df["Date"] = pd.to_datetime(daily_risk_df["Date"])
-daily_risk_df["Average Risk"] = pd.to_numeric(daily_risk_df["Average Risk"])
-
+daily_risk_df["Average Risk"] = pd.to_numeric(
+    daily_risk_df["Average Risk"]
+)
 
 st.line_chart(
     daily_risk_df,
@@ -151,7 +271,8 @@ st.line_chart(
     y="Average Risk"
 )
 
-# risk causes
+
+# Risk causes
 
 risk_causes_df = pd.DataFrame(
     {
@@ -172,7 +293,9 @@ risk_causes_df = pd.DataFrame(
     }
 )
 
-risk_causes_df["Average Risk"] = pd.to_numeric(risk_causes_df["Average Risk"])
+risk_causes_df["Average Risk"] = pd.to_numeric(
+    risk_causes_df["Average Risk"]
+)
 
 st.subheader("Risk Causes")
 
