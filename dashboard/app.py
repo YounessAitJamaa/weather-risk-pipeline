@@ -48,6 +48,20 @@ selected_period = st.date_input(
 period_start = selected_period[0]
 period_end = selected_period[1]
 
+# filter by risk level
+risk_levels = [
+    "All risk levels",
+    "Low",
+    "Moderate",
+    "High",
+    "Extreme"
+]
+
+selected_risk_level = st.selectbox(
+    "Select a risk level",
+    risk_levels
+)
+
 
 if selected_city == "All cities" and selected_date == "All dates":
     city_filter = "WHERE wr.date BETWEEN :period_start AND :period_end"
@@ -82,6 +96,15 @@ else:
         "city": selected_city,
         "date": selected_date
     }
+
+
+if selected_risk_level != "All risk levels":
+    if city_filter == "":
+        city_filter = "WHERE wr.risk_category = :risk_level"
+    else:
+        city_filter += " AND wr.risk_category = :risk_level"
+
+    city_params["risk_level"] = selected_risk_level
 
 with engine.connect() as connection:
 
