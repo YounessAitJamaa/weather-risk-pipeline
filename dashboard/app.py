@@ -61,6 +61,22 @@ with engine.connect() as connection:
 
     top_risky_records = result.fetchall()
 
+    result = connection.execute(
+        text("""
+            SELECT
+                date,
+                ROUND(AVG(risk_score)::numeric, 2) AS average_risk
+            FROM weather_risk
+            GROUP BY date
+            ORDER BY date
+        """)
+    )
+
+    daily_risk = result.fetchall()
+
+
+
+# KPIs
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -76,8 +92,11 @@ with col3:
 with col4:
     st.metric("Highest Risk", highest_risk)
 
-st.subheader("Risk Distribution")
 
+
+# Risk Distribution 
+
+st.subheader("Risk Distribution")
 
 risk_chart = pd.DataFrame(
     {"Counts" : risk_counts},
@@ -85,6 +104,9 @@ risk_chart = pd.DataFrame(
 )
 
 st.bar_chart(risk_chart)
+
+
+# Top 10 Risky City/Date Records
 
 st.subheader("Top 10 Risky City/Date Records")
 
@@ -94,3 +116,23 @@ risky_records_df = pd.DataFrame(
 )
 
 st.dataframe(risky_records_df)
+
+# Daily Risk Trend
+
+st.subheader("Daily Risk Trend")
+
+daily_risk_df = pd.DataFrame(
+    daily_risk,
+    columns=["Date", "Average Risk"]
+)
+
+
+daily_risk_df["Date"] = pd.to_datetime(daily_risk_df["Date"])
+daily_risk_df["Average Risk"] = pd.to_numeric(daily_risk_df["Average Risk"])
+
+
+st.line_chart(
+    daily_risk_df,
+    x="Date",
+    y="Average Risk"
+)
